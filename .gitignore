@@ -1,13 +1,15 @@
-# Video files
+# Videos and outputs
 *.mov
 *.mp4
 *.avi
 *.m4v
-
-# Analysis outputs
 *_angles.csv
-*_overlay.mp4
 *_charts.png
+*_overlay.mp4
+
+# Uploads folder contents but keep the folder
+uploads/*
+!uploads/.gitkeep
 
 # Python cache
 __pycache__/

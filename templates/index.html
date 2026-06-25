@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Serve Analyzer</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Custom Tailwind config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            court:   "#0f172a",
+            panel:   "#1e293b",
+            border:  "#334155",
+            accent:  "#38bdf8",
+            green:   "#2a9d8f",
+            red:     "#e63946",
+            yellow:  "#e9c46a",
+            purple:  "#818cf8",
+          },
+          fontFamily: {
+            sans: ["Inter", "system-ui", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    body { background-color: #0f172a; }
+
+    /* Drag-over highlight */
+    #drop-zone.drag-over {
+      border-color: #38bdf8;
+      background-color: rgba(56, 189, 248, 0.08);
+    }
+
+    /* Progress bar animation */
+    @keyframes progress-pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.5; }
+    }
+    .progress-pulse { animation: progress-pulse 1.5s ease-in-out infinite; }
+
+    /* Fade in cards */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp 0.5s ease forwards; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar       { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+
+<body class="text-slate-100 font-sans min-h-screen">
+
+  <!-- ── Nav ── -->
+  <nav class="border-b border-border bg-panel/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🎾</span>
+        <span class="text-xl font-bold text-white tracking-tight">ServeAnalyzer</span>
+      </div>
+      <div class="flex items-center gap-6 text-sm text-slate-400">
+        <a href="#how-it-works" class="hover:text-white transition-colors">How it works</a>
+        <a href="#benchmarks" class="hover:text-white transition-colors">ATP Benchmarks</a>
+        <a href="https://github.com/YOURUSERNAME/serve-analyzer" target="_blank"
+           class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg transition-colors">
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-12 text-center">
+    <div class="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent text-sm px-4 py-2 rounded-full mb-6">
+      <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
+      Computer Vision · No account required · 100% free
+    </div>
+    <h1 class="text-5xl md:text-6xl font-extrabold text-white leading-tight mb-6">
+      Analyze your serve like<br/>
+      <span class="text-accent">a touring pro</span>
+    </h1>
+    <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-10">
+      Upload a video of your serve. Our computer vision model tracks your body mechanics
+      and compares your angles to ATP tour averages — in seconds.
+    </p>
+  </section>
+
+  <!-- ── Upload Card ── -->
+  <section class="max-w-2xl mx-auto px-6 mb-16">
+    <div class="bg-panel border border-border rounded-2xl p-8">
+
+      <!-- Drop zone -->
+      <div id="drop-zone"
+           class="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer transition-all hover:border-accent hover:bg-accent/5"
+           onclick="document.getElementById('file-input').click()">
+        <div class="text-5xl mb-4">📹</div>
+        <p class="text-lg font-semibold text-white mb-2">Drop your serve video here</p>
+        <p class="text-sm text-slate-400 mb-4">or click to browse · .mov .mp4 .avi · max 500MB</p>
+        <p class="text-xs text-slate-500">💡 Tip: Film side-on in landscape at 240fps for best results</p>
+        <input id="file-input" type="file" accept=".mov,.mp4,.avi,.m4v" class="hidden" />
+      </div>
+
+      <!-- File selected state -->
+      <div id="file-selected" class="hidden mt-4 flex items-center justify-between bg-slate-800 rounded-xl px-4 py-3">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🎬</span>
+          <div>
+            <p id="file-name" class="text-sm font-medium text-white"></p>
+            <p id="file-size" class="text-xs text-slate-400"></p>
+          </div>
+        </div>
+        <button onclick="clearFile()" class="text-slate-500 hover:text-red text-xl transition-colors">✕</button>
+      </div>
+
+      <!-- Trim controls -->
+      <div id="trim-controls" class="hidden mt-6">
+        <p class="text-sm font-semibold text-slate-300 mb-3">
+          Optional: trim to just the serve window
+          <span class="text-slate-500 font-normal">(trophy pose → contact)</span>
+        </p>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">Start frame</label>
+            <input id="start-frame" type="number" min="0" value="0" placeholder="0"
+                   class="w-full bg-slate-800 border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label class="text-xs text-slate-400 block mb-1">End frame (leave blank = full video)</label>
+            <input id="end-frame" type="number" min="0" placeholder="auto"
+                   class="w-full bg-slate-800 border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Analyze button -->
+      <button id="analyze-btn" onclick="analyzeServe()"
+              class="hidden mt-6 w-full bg-accent hover:bg-sky-400 text-court font-bold py-4 rounded-xl text-lg transition-all transform hover:scale-[1.02] active:scale-[0.98]">
+        ⚡ Analyze My Serve
+      </button>
+
+      <!-- Loading state -->
+      <div id="loading" class="hidden mt-6">
+        <div class="flex items-center justify-center gap-3 mb-3">
+          <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+          <span id="loading-text" class="text-accent font-medium">Uploading video...</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2">
+          <div id="progress-bar" class="bg-accent h-2 rounded-full progress-pulse transition-all duration-500" style="width: 10%"></div>
+        </div>
+        <p class="text-xs text-slate-500 text-center mt-2">This takes 20–60 seconds depending on video length</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="error-box" class="hidden mt-4 bg-red/10 border border-red/30 rounded-xl px-4 py-3">
+        <p class="text-red text-sm font-medium">⚠️ <span id="error-msg"></span></p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Results Section ── -->
+  <section id="results" class="hidden max-w-6xl mx-auto px-6 mb-20">
+
+    <h2 class="text-3xl font-bold text-white mb-2">Your Results</h2>
+    <p class="text-slate-400 mb-8">Blue line = your serve · Dashed line = ATP average</p>
+
+    <!-- Summary cards -->
+    <div id="summary-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10"></div>
+
+    <!-- Charts grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-1">Right Elbow Angle</h3>
+        <p class="text-xs text-slate-400 mb-4">Near 180° at contact = full extension (ideal)</p>
+        <canvas id="chart-elbow"></canvas>
+      </div>
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-1">Right Shoulder Angle</h3>
+        <p class="text-xs text-slate-400 mb-4">Peak angle shows full arm elevation</p>
+        <canvas id="chart-shoulder"></canvas>
+      </div>
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-1">Toss Arm Height</h3>
+        <p class="text-xs text-slate-400 mb-4">Mountain shape = consistent toss mechanics</p>
+        <canvas id="chart-toss"></canvas>
+      </div>
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <h3 class="text-lg font-semibold text-white mb-1">Shoulder Tilt</h3>
+        <p class="text-xs text-slate-400 mb-4">Positive = right shoulder higher (ideal at contact)</p>
+        <canvas id="chart-tilt"></canvas>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── How It Works ── -->
+  <section id="how-it-works" class="max-w-6xl mx-auto px-6 mb-20">
+    <h2 class="text-3xl font-bold text-white mb-10 text-center">How it works</h2>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div class="bg-panel border border-border rounded-2xl p-6 text-center">
+        <div class="text-4xl mb-4">📱</div>
+        <h3 class="font-semibold text-white mb-2">1. Film your serve</h3>
+        <p class="text-sm text-slate-400">Side-on, landscape, 240fps slow motion if possible</p>
+      </div>
+      <div class="bg-panel border border-border rounded-2xl p-6 text-center">
+        <div class="text-4xl mb-4">⬆️</div>
+        <h3 class="font-semibold text-white mb-2">2. Upload</h3>
+        <p class="text-sm text-slate-400">Drag and drop your video — up to 500MB</p>
+      </div>
+      <div class="bg-panel border border-border rounded-2xl p-6 text-center">
+        <div class="text-4xl mb-4">🤖</div>
+        <h3 class="font-semibold text-white mb-2">3. CV analysis</h3>
+        <p class="text-sm text-slate-400">MediaPipe tracks 33 body landmarks across every frame</p>
+      </div>
+      <div class="bg-panel border border-border rounded-2xl p-6 text-center">
+        <div class="text-4xl mb-4">📊</div>
+        <h3 class="font-semibold text-white mb-2">4. Get insights</h3>
+        <p class="text-sm text-slate-400">See your angles vs ATP benchmarks instantly</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ATP Benchmarks ── -->
+  <section id="benchmarks" class="max-w-6xl mx-auto px-6 mb-24">
+    <h2 class="text-3xl font-bold text-white mb-3 text-center">ATP Benchmark Data</h2>
+    <p class="text-slate-400 text-center mb-10">Reference ranges from published sports biomechanics research</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white">Elbow Angle at Contact</h3>
+          <span class="text-accent font-bold text-xl">172°</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2 mb-2">
+          <div class="bg-accent h-2 rounded-full" style="width: 90%"></div>
+        </div>
+        <p class="text-xs text-slate-400">Range: 160° – 180° · Nearly full extension at contact</p>
+      </div>
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white">Shoulder Angle Peak</h3>
+          <span class="text-green font-bold text-xl">175°</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2 mb-2">
+          <div class="bg-green h-2 rounded-full" style="width: 88%"></div>
+        </div>
+        <p class="text-xs text-slate-400">Range: 165° – 185° · Full arm elevation through kinetic chain</p>
+      </div>
+
+      <div class="bg-panel border border-border rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white">Shoulder Tilt at Contact</h3>
+          <span class="text-yellow font-bold text-xl">3.5</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2 mb-2">
+          <div class="bg-yellow h-2 rounded-full" style="width: 60%"></div>
+        </div>
+        <p class="text-xs text-slate-400">Range: 1 – 6 · Slight positive tilt (right shoulder higher) is ideal</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer class="border-t border-border bg-panel py-8">
+    <div class="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">🎾</span>
+        <span class="font-bold text-white">ServeAnalyzer</span>
+      </div>
+      <p class="text-sm text-slate-500">Built with MediaPipe · OpenCV · Flask · No data stored</p>
+      <a href="https://github.com/YOURUSERNAME/serve-analyzer" target="_blank"
+         class="text-sm text-slate-400 hover:text-white transition-colors">View on GitHub →</a>
+    </div>
+  </footer>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

@@ -30,6 +30,7 @@ function handleFileSelect(file) {
   document.getElementById("analyze-btn").classList.remove("hidden");
   document.getElementById("drop-zone").classList.add("opacity-50", "pointer-events-none");
   hideError();
+  initTrimmer(file);
 }
 
 function clearFile() {
@@ -66,7 +67,12 @@ async function analyzeServe() {
 
   // Build form data
   const formData = new FormData();
-  formData.append("video", selectedFile);
+  // Use already-uploaded preview file if available
+  if (window._previewFilename) {
+    formData.append("preview_filename", window._previewFilename);
+  } else {
+    formData.append("video", selectedFile);
+  }
 
   const startFrame = document.getElementById("start-frame").value;
   const endFrame   = document.getElementById("end-frame").value;
@@ -338,4 +344,95 @@ function showError(msg) {
 }
 function hideError() {
   document.getElementById("error-box").classList.add("hidden");
+}
+
+// ── Video trimmer ──
+let videoFPS = 30;
+let videoDuration = 0;
+
+function initTrimmer(file) {
+  const video = document.getElementById("preview-video");
+
+  // Upload file first to get a previewable URL from Flask
+  const previewData = new FormData();
+  previewData.append("video", file);
+
+  fetch("/upload_preview", { method: "POST", body: previewData })
+    .then(res => res.json())
+    .then(data => {
+      if (data.preview_url) {
+        video.src = data.preview_url;
+        window._previewFilename = data.filename;
+      }
+    });
+
+  video.addEventListener("loadedmetadata", () => {
+    videoDuration = video.duration;
+
+    // Estimate FPS from filename — if 240fps in name use 240, else 30
+    const name = file.name.toLowerCase();
+    if (name.includes("240")) videoFPS = 240;
+    else if (name.includes("120")) videoFPS = 120;
+    else if (name.includes("60"))  videoFPS = 60;
+    else videoFPS = 30;
+
+    // Set sliders to full range in seconds
+    document.getElementById("start-slider").max = videoDuration;
+    document.getElementById("start-slider").value = 0;
+    document.getElementById("end-slider").max = videoDuration;
+    document.getElementById("end-slider").value = videoDuration;
+
+    updateTrimLabels(0, videoDuration);
+  });
+}
+
+function onStartSlider(val) {
+  val = parseFloat(val);
+  const endVal = parseFloat(document.getElementById("end-slider").value);
+
+  // Don't let start pass end
+  if (val >= endVal) {
+    val = endVal - 0.1;
+    document.getElementById("start-slider").value = val;
+  }
+
+  // Seek video to start point
+  const video = document.getElementById("preview-video");
+  video.currentTime = val;
+
+  updateTrimLabels(val, endVal);
+}
+
+function onEndSlider(val) {
+  val = parseFloat(val);
+  const startVal = parseFloat(document.getElementById("start-slider").value);
+
+  // Don't let end pass start
+  if (val <= startVal) {
+    val = startVal + 0.1;
+    document.getElementById("end-slider").value = val;
+  }
+
+  // Seek video to end point
+  const video = document.getElementById("preview-video");
+  video.currentTime = val;
+
+  updateTrimLabels(startVal, val);
+}
+
+function updateTrimLabels(startSec, endSec) {
+  const startFrame = Math.round(startSec * videoFPS);
+  const endFrame   = Math.round(endSec   * videoFPS);
+  const duration   = (endSec - startSec).toFixed(2);
+
+  document.getElementById("start-time-label").textContent =
+    `${startSec.toFixed(2)}s — frame ${startFrame}`;
+  document.getElementById("end-time-label").textContent =
+    `${endSec.toFixed(2)}s — frame ${endFrame}`;
+  document.getElementById("trim-summary").textContent =
+    `${startSec.toFixed(2)}s → ${endSec.toFixed(2)}s (${duration}s window)`;
+
+  // Update hidden inputs that Flask reads
+  document.getElementById("start-frame").value = startFrame;
+  document.getElementById("end-frame").value   = endFrame;
 }

@@ -130,24 +130,50 @@
         <button onclick="clearFile()" class="text-slate-500 hover:text-red text-xl transition-colors">✕</button>
       </div>
 
-      <!-- Trim controls -->
+     <!-- Video preview + trimmer -->
       <div id="trim-controls" class="hidden mt-6">
         <p class="text-sm font-semibold text-slate-300 mb-3">
-          Optional: trim to just the serve window
+          Trim to your serve window
           <span class="text-slate-500 font-normal">(trophy pose → contact)</span>
         </p>
-        <div class="grid grid-cols-2 gap-4">
+
+        <!-- Video preview -->
+        <video id="preview-video" class="w-full rounded-xl bg-black mb-4" controls muted playsinline></video>
+
+        <!-- Trim sliders -->
+        <div class="space-y-4">
+
+          <!-- Start slider -->
           <div>
-            <label class="text-xs text-slate-400 block mb-1">Start frame</label>
-            <input id="start-frame" type="number" min="0" value="0" placeholder="0"
-                   class="w-full bg-slate-800 border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs text-green font-semibold">▶ Start</label>
+              <span id="start-time-label" class="text-xs text-slate-400">0.00s — frame 0</span>
+            </div>
+            <input id="start-slider" type="range" min="0" max="100" value="0" step="0.01"
+                  class="w-full accent-green cursor-pointer" oninput="onStartSlider(this.value)" />
           </div>
+
+          <!-- End slider -->
           <div>
-            <label class="text-xs text-slate-400 block mb-1">End frame (leave blank = full video)</label>
-            <input id="end-frame" type="number" min="0" placeholder="auto"
-                   class="w-full bg-slate-800 border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent" />
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs text-red font-semibold">⏹ End</label>
+              <span id="end-time-label" class="text-xs text-slate-400">—</span>
+            </div>
+            <input id="end-slider" type="range" min="0" max="100" value="100" step="0.01"
+                  class="w-full accent-red cursor-pointer" oninput="onEndSlider(this.value)" />
           </div>
+
         </div>
+
+        <!-- Trim summary -->
+        <div class="mt-4 bg-slate-800 rounded-xl px-4 py-3 flex items-center justify-between">
+          <span class="text-xs text-slate-400">Selected window</span>
+          <span id="trim-summary" class="text-sm font-semibold text-white">Full video</span>
+        </div>
+
+        <!-- Hidden frame inputs still sent to Flask -->
+        <input id="start-frame" type="hidden" value="0" />
+        <input id="end-frame"   type="hidden" value="" />
       </div>
 
       <!-- Analyze button -->

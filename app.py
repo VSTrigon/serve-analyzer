@@ -59,24 +59,46 @@ def allowed_file(filename):
 def index():
     return render_template("index.html")
 
+@app.route("/preview/<filename>")
+def preview(filename):
+    from flask import send_from_directory
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
+
+@app.route("/upload_preview", methods=["POST"])
+def upload_preview():
+    if "video" not in request.files:
+        return jsonify({"error": "No file"}), 400
+    file = request.files["video"]
+    ext = file.filename.rsplit(".", 1)[1].lower()
+    filename = f"preview_{uuid.uuid4().hex}.{ext}"
+    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    file.save(path)
+    return jsonify({
+        "filename": filename,
+        "preview_url": f"/preview/{filename}"
+    })
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    # -- Validate upload --
-    if "video" not in request.files:
-        return jsonify({"error": "No video file provided."}), 400
-
-    file = request.files["video"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected."}), 400
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type. Please upload a .mov, .mp4, .avi, or .m4v file."}), 400
-
-    # -- Save uploaded file with unique name --
-    ext = file.filename.rsplit(".", 1)[1].lower()
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    video_path  = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
-    file.save(video_path)
+    # -- Use preview file if already uploaded, otherwise handle new upload --
+    preview_filename = request.form.get("preview_filename")
+    if preview_filename:
+        video_path = os.path.join(app.config["UPLOAD_FOLDER"], preview_filename)
+        if not os.path.exists(video_path):
+            return jsonify({"error": "Preview file not found. Please re-upload."}), 400
+    else:
+        if "video" not in request.files:
+            return jsonify({"error": "No video file provided."}), 400
+        file = request.files["video"]
+        if file.filename == "":
+            return jsonify({"error": "No file selected."}), 400
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Invalid file type. Please upload a .mov, .mp4, .avi, or .m4v file."}), 400
+        ext = file.filename.rsplit(".", 1)[1].lower()
+        unique_name = f"{uuid.uuid4().hex}.{ext}"
+        video_path  = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
+        file.save(video_path)
 
     # -- Get optional frame trim params --
     start_frame = request.form.get("start_frame", "0")
@@ -128,9 +150,11 @@ def analyze():
         "duration_sec":       round(df["time_sec"].max(), 2),
     }
 
-    # -- Cleanup temp files --
-    os.remove(video_path)
+   # -- Cleanup temp files --
     os.remove(csv_path)
+    # Video deleted after preview no longer needed
+    if os.path.exists(video_path):
+        os.remove(video_path)
 
     return jsonify({
         "chart_data":    chart_data,

@@ -1,0 +1,15 @@
+# Video files
+*.mov
+*.mp4
+*.avi
+*.m4v
+
+# Analysis outputs
+*_angles.csv
+*_overlay.mp4
+*_charts.png
+
+# Python cache
+__pycache__/
+*.pyc
+.DS_Store

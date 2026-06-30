@@ -214,14 +214,36 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Render results ──
 function renderResults(data) {
+  console.log("FULL RESULTS:", data);
   const section = document.getElementById("results-section");
   section.classList.add("visible");
   section.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const { chart_data, summary, atp_benchmarks } = data;
-
+  
+  renderFeedback(data.feedback);
   renderSummaryCards(summary, atp_benchmarks);
   renderCharts(chart_data, atp_benchmarks);
+}
+
+// ── Feedback ──
+function renderFeedback(feedback) {
+  const grid = document.getElementById("feedback-grid");
+  grid.innerHTML = "";
+
+  const statusLabels = { good: "✓ Looking good", ok: "~ Room to improve", improve: "↑ Focus area" };
+
+  feedback.forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = `feedback-card ${item.status}`;
+    div.innerHTML = `
+      <div class="feedback-metric">${item.metric}</div>
+      <div class="feedback-status">${statusLabels[item.status]}</div>
+      <div class="feedback-msg">${item.message}</div>
+    `;
+    grid.appendChild(div);
+    setTimeout(() => div.classList.add("revealed"), i * 100);
+  });
 }
 
 // ── Summary cards ──
@@ -245,17 +267,17 @@ function renderSummaryCards(summary, atp) {
       color: getRangeColor(summary.r_shoulder_max, atp.r_shoulder_angle.range_low, atp.r_shoulder_angle.range_high),
     },
     {
-      icon:  "📐",
-      val:   summary.shoulder_tilt_avg,
-      label: "Shoulder Tilt",
-      atp:   `ATP avg: ${atp.shoulder_tilt.avg}`,
-      color: getRangeColor(summary.shoulder_tilt_avg, atp.shoulder_tilt.range_low, atp.shoulder_tilt.range_high),
+      icon:  "⚡",
+      val:   summary.x_factor_max + "°",
+      label: "Peak X-Factor",
+      atp:   `Elite range: 25–45°`,
+      color: getRangeColor(summary.x_factor_max, 25, 45),
     },
     {
       icon:  "🎞",
       val:   summary.frames_analyzed,
       label: "Frames analyzed",
-      atp:   `${summary.duration_sec}s window`,
+      atp:   `${summary.duration_frames} frame window`,
       color: "ok",
     },
   ];
@@ -310,7 +332,7 @@ function renderCharts(data, atp) {
       x: {
         ticks: { color: "#444", maxTicksLimit: 5, font: { size: 10, family: "'JetBrains Mono'" } },
         grid:  { color: "#1A1A1A" },
-        title: { display: true, text: "seconds", color: "#444", font: { size: 10 } },
+        title: { display: true, text: "frames", color: "#444", font: { size: 10 } },
       },
       y: {
         ticks: { color: "#444", font: { size: 10, family: "'JetBrains Mono'" } },
@@ -397,8 +419,53 @@ function renderCharts(data, atp) {
     }},
   });
 
+  // X-Factor
+  charts.xfactor = new Chart(document.getElementById("chart-xfactor"), {
+    type: "line",
+    data: { labels: t, datasets: [
+      playerDataset(data.x_factor, "#C8F000"),
+      atpDataset(atp.x_factor.avg, "#C8F000"),
+    ]},
+    options: { ...baseOptions, plugins: { ...baseOptions.plugins,
+        legend: { display: true, labels: { color: "#666", boxWidth: 10, font: { size: 11, family: "'JetBrains Mono'" } } },
+      },
+      scales: { ...baseOptions.scales,
+        y: { ...baseOptions.scales.y, min: 0, max: 60,
+             title: { display: true, text: "degrees", color: "#444", font: { size: 10 } } },
+    }},
+  });
+
+  // Knee
+  charts.knee = new Chart(document.getElementById("chart-knee"), {
+    type: "line",
+    data: { labels: t, datasets: [
+      playerDataset(data.r_knee_angle, "#00CC88"),
+      atpDataset(atp.r_knee_angle.avg, "#00CC88"),
+    ]},
+    options: { ...baseOptions, plugins: { ...baseOptions.plugins,
+        legend: { display: true, labels: { color: "#666", boxWidth: 10, font: { size: 11, family: "'JetBrains Mono'" } } },
+      },
+      scales: { ...baseOptions.scales,
+        y: { ...baseOptions.scales.y, min: 100, max: 200,
+             title: { display: true, text: "degrees", color: "#444", font: { size: 10 } } },
+    }},
+  });
+
+  // Weight transfer
+  charts.weight = new Chart(document.getElementById("chart-weight"), {
+    type: "line",
+    data: { labels: t, datasets: [
+      playerDataset(data.weight_transfer, "#818CF8"),
+    ]},
+    options: { ...baseOptions, plugins: { ...baseOptions.plugins, legend: { display: false } },
+      scales: { ...baseOptions.scales,
+        y: { ...baseOptions.scales.y,
+             title: { display: true, text: "relative distance", color: "#444", font: { size: 10 } } },
+    }},
+  });
+
   // Reveal chart cards with stagger
-  ["card-elbow","card-shoulder","card-toss","card-tilt"].forEach((id, i) => {
+  ["card-elbow","card-shoulder","card-toss","card-tilt","card-xfactor","card-knee","card-weight"].forEach((id, i) => {
     setTimeout(() => document.getElementById(id).classList.add("revealed"), 300 + i * 150);
   });
 }

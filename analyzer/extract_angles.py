@@ -87,12 +87,16 @@ def extract_angles(input_path, start_frame=0, end_frame=None):
             R_ELBOW    = 14
             R_WRIST    = 16
             R_HIP      = 24
+            R_KNEE     = 26
+            R_ANKLE    = 28
 
-            # Left side (toss arm)
+            # Left side (toss arm / non-hitting side)
             L_SHOULDER = 11
             L_ELBOW    = 13
             L_WRIST    = 15
             L_HIP      = 23
+            L_KNEE     = 25
+            L_ANKLE    = 27
 
             # Calculate angles
             r_elbow_angle    = calculate_angle(pt(R_SHOULDER), pt(R_ELBOW), pt(R_WRIST))
@@ -103,6 +107,34 @@ def extract_angles(input_path, start_frame=0, end_frame=None):
             # Shoulder tilt: difference in Y between left and right shoulder
             # (positive = right shoulder higher, negative = left shoulder higher)
             shoulder_tilt = round((lm[L_SHOULDER].y - lm[R_SHOULDER].y) * 100, 2)
+
+            # --- NEW: Knee bend (hip-knee-ankle angle) ---
+            # Smaller angle = deeper knee bend (more loaded)
+            r_knee_angle = calculate_angle(pt(R_HIP), pt(R_KNEE), pt(R_ANKLE))
+            l_knee_angle = calculate_angle(pt(L_HIP), pt(L_KNEE), pt(L_ANKLE))
+
+            # --- NEW: Hip rotation (tilt between hips, same logic as shoulder tilt) ---
+            hip_tilt = round((lm[L_HIP].y - lm[R_HIP].y) * 100, 2)
+
+            # --- NEW: Shoulder-hip separation (the "X-factor") ---
+            # Angle of the line between shoulders, vs angle of the line between hips,
+            # in the horizontal (x) plane — captures rotational coil between upper/lower body
+            shoulder_line_angle = np.degrees(np.arctan2(
+                lm[R_SHOULDER].y - lm[L_SHOULDER].y,
+                lm[R_SHOULDER].x - lm[L_SHOULDER].x
+            ))
+            hip_line_angle = np.degrees(np.arctan2(
+                lm[R_HIP].y - lm[L_HIP].y,
+                lm[R_HIP].x - lm[L_HIP].x
+            ))
+            # Normalize angle difference to 0-180 range to avoid wraparound bugs
+            raw_diff = abs(shoulder_line_angle - hip_line_angle)
+            x_factor = round(min(raw_diff, 360 - raw_diff), 2)
+
+            # --- NEW: Weight transfer proxy ---
+            # Horizontal distance between front and back ankle, normalized
+            # Tracks how far weight has shifted forward through the motion
+            weight_transfer = round(abs(lm[R_ANKLE].x - lm[L_ANKLE].x), 4)
 
             # Wrist heights (lower Y value = higher on screen)
             r_wrist_height = round(lm[R_WRIST].y, 4)
@@ -126,6 +158,11 @@ def extract_angles(input_path, start_frame=0, end_frame=None):
                 "l_wrist_height":   l_wrist_height,
                 "r_wrist_vis":      r_wrist_vis,
                 "r_elbow_vis":      r_elbow_vis,
+                "r_knee_angle":     r_knee_angle,
+                "l_knee_angle":     l_knee_angle,
+                "hip_tilt":         hip_tilt,
+                "x_factor":         x_factor,
+                "weight_transfer":  weight_transfer,
             })
 
     cap.release()
@@ -140,6 +177,7 @@ def extract_angles(input_path, start_frame=0, end_frame=None):
     print(f"  Max right elbow angle:    {df['r_elbow_angle'].max():.1f}°  (most extended)")
     print(f"  Avg shoulder tilt:        {df['shoulder_tilt'].mean():.1f}")
     print(f"  Min right wrist height:   {df['r_wrist_height'].min():.3f}  (highest point)")
+    print(f"  Frames analyzed:          {len(df)}")
 
 
 if __name__ == "__main__":

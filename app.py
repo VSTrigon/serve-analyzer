@@ -46,6 +46,30 @@ ATP_BENCHMARKS = {
         "unit": "",
         "description": "Slight positive tilt (right shoulder higher) is ideal at contact."
     },
+    "x_factor": {
+        "avg": 35,
+        "range_low": 25,
+        "range_high": 45,
+        "label": "Shoulder-Hip Separation (X-Factor)",
+        "unit": "°",
+        "description": "The 'coil' between hips and shoulders. Elite servers generate 25-45° of separation, storing energy that releases into racket speed."
+    },
+    "r_knee_angle": {
+        "avg": 145,
+        "range_low": 120,
+        "range_high": 160,
+        "label": "Knee Bend at Load",
+        "unit": "°",
+        "description": "Deeper knee bend (lower angle) generally means more leg drive feeding into the kinetic chain."
+    },
+    "weight_transfer": {
+        "avg": 0.08,
+        "range_low": 0.05,
+        "range_high": 0.12,
+        "label": "Weight Transfer",
+        "unit": "",
+        "description": "Horizontal distance between front and back foot — tracks how far your weight shifts forward through the serve."
+    },
 }
 
 
@@ -130,25 +154,114 @@ def analyze():
     # -- Build response payload --
     # Send time series data for charts
     chart_data = {
-        "time":             df["time_sec"].tolist(),
+        "time":             df["frame"].tolist(),
         "r_elbow_angle":    df["r_elbow_angle"].rolling(5, center=True, min_periods=1).mean().round(2).tolist(),
         "r_shoulder_angle": df["r_shoulder_angle"].rolling(5, center=True, min_periods=1).mean().round(2).tolist(),
         "shoulder_tilt":    df["shoulder_tilt"].rolling(5, center=True, min_periods=1).mean().round(2).tolist(),
         "l_wrist_height":   (1 - df["l_wrist_height"].rolling(5, center=True, min_periods=1).mean()).round(4).tolist(),
+        "r_knee_angle":     df["r_knee_angle"].rolling(5, center=True, min_periods=1).mean().round(2).tolist(),
+        "x_factor":         df["x_factor"].rolling(5, center=True, min_periods=1).mean().round(2).tolist(),
+        "weight_transfer":  df["weight_transfer"].rolling(5, center=True, min_periods=1).mean().round(4).tolist(),
     }
 
     # Summary stats
+    # Elbow extension at peak (not the whole-window min, which includes follow-through)
+    # Find peak extension as the max in the first 70% of the window — i.e. up to contact
+    cutoff = int(len(df) * 0.7)
+    r_elbow_at_contact = round(df["r_elbow_angle"].iloc[:cutoff].max(), 1)
+
     summary = {
         "r_elbow_avg":        round(df["r_elbow_angle"].mean(), 1),
-        "r_elbow_min":        round(df["r_elbow_angle"].min(), 1),
+        "r_elbow_contact":    r_elbow_at_contact,
         "r_elbow_max":        round(df["r_elbow_angle"].max(), 1),
         "r_shoulder_avg":     round(df["r_shoulder_angle"].mean(), 1),
         "r_shoulder_max":     round(df["r_shoulder_angle"].max(), 1),
         "shoulder_tilt_avg":  round(df["shoulder_tilt"].mean(), 1),
         "toss_peak":          round((1 - df["l_wrist_height"]).max(), 3),
         "frames_analyzed":    len(df),
-        "duration_sec":       round(df["time_sec"].max(), 2),
+        "duration_frames":    len(df),
+        "x_factor_max":       round(df["x_factor"].max(), 1),
+        "x_factor_avg":       round(df["x_factor"].mean(), 1),
+        "r_knee_min":         round(df["r_knee_angle"].min(), 1),
+        "weight_transfer_max": round(df["weight_transfer"].max(), 4),
     }
+
+    # -- Generate feedback --
+    feedback = []
+
+    # Elbow at contact
+    if summary["r_elbow_contact"] >= 170:
+        feedback.append({
+            "metric": "Elbow Extension",
+            "status": "good",
+            "message": f"Strong arm extension at contact ({summary['r_elbow_contact']}°). You're generating good racket head speed through the hitting zone."
+        })
+    elif summary["r_elbow_contact"] >= 155:
+        feedback.append({
+            "metric": "Elbow Extension",
+            "status": "ok",
+            "message": f"Decent arm extension at contact ({summary['r_elbow_contact']}°). Try to fully extend your hitting arm — even a few more degrees translates to measurable added power."
+        })
+    else:
+        feedback.append({
+            "metric": "Elbow Extension",
+            "status": "improve",
+            "message": f"Your arm isn't fully extending at contact ({summary['r_elbow_contact']}°). Focus on reaching up and out toward the ball, like you're trying to hit the highest possible point."
+        })
+
+    # X-factor
+    if summary["x_factor_max"] >= 30:
+        feedback.append({
+            "metric": "X-Factor (Coil)",
+            "status": "good",
+            "message": f"Excellent shoulder-hip separation ({summary['x_factor_max']}° peak). You're generating a strong rotational coil that feeds power through the kinetic chain."
+        })
+    elif summary["x_factor_max"] >= 20:
+        feedback.append({
+            "metric": "X-Factor (Coil)",
+            "status": "ok",
+            "message": f"Moderate coil ({summary['x_factor_max']}° peak). Try initiating your hip rotation slightly earlier in the load-up — let the hips lead the shoulders to build more separation."
+        })
+    else:
+        feedback.append({
+            "metric": "X-Factor (Coil)",
+            "status": "improve",
+            "message": f"Low shoulder-hip separation ({summary['x_factor_max']}°). This is a significant power leak. Work on turning your hips into the court while keeping your shoulders back longer during the load-up."
+        })
+
+    # Knee bend
+    if summary["r_knee_min"] <= 145:
+        feedback.append({
+            "metric": "Knee Bend",
+            "status": "good",
+            "message": f"Good knee bend in your load-up ({summary['r_knee_min']}°). Your legs are contributing to the kinetic chain effectively."
+        })
+    elif summary["r_knee_min"] <= 160:
+        feedback.append({
+            "metric": "Knee Bend",
+            "status": "ok",
+            "message": f"Moderate knee bend ({summary['r_knee_min']}°). Dropping a little lower in your load-up will give your legs more to push off from, adding free power to the serve."
+        })
+    else:
+        feedback.append({
+            "metric": "Knee Bend",
+            "status": "improve",
+            "message": f"Minimal knee bend detected ({summary['r_knee_min']}°). Try consciously bending your knees more during the toss — think of loading a spring before releasing upward into the ball."
+        })
+
+    # Shoulder tilt
+    if 1 <= summary["shoulder_tilt_avg"] <= 6:
+        feedback.append({
+            "metric": "Shoulder Tilt",
+            "status": "good",
+            "message": f"Good shoulder tilt at contact ({summary['shoulder_tilt_avg']}). Your hitting shoulder is slightly higher than your toss shoulder — that's ideal."
+        })
+    else:
+        feedback.append({
+            "metric": "Shoulder Tilt",
+            "status": "ok",
+            "message": f"Shoulder tilt is outside the typical range ({summary['shoulder_tilt_avg']}). Ideally your hitting shoulder should be slightly higher at contact — check your trophy pose alignment."
+        })
 
    # -- Cleanup temp files --
     os.remove(csv_path)
@@ -157,9 +270,10 @@ def analyze():
         os.remove(video_path)
 
     return jsonify({
-        "chart_data":    chart_data,
-        "summary":       summary,
+        "chart_data":     chart_data,
+        "summary":        summary,
         "atp_benchmarks": ATP_BENCHMARKS,
+        "feedback":       feedback,
     })
 
 

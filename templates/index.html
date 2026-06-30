@@ -794,6 +794,52 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
+
+    /* Feedback */
+    .feedback-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .feedback-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px 24px;
+      border-left: 3px solid var(--border);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    .feedback-card.revealed { opacity: 1; transform: translateY(0); }
+    .feedback-card.good   { border-left-color: var(--green); }
+    .feedback-card.ok     { border-left-color: var(--accent); }
+    .feedback-card.improve { border-left-color: var(--red); }
+    .feedback-metric {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .feedback-card.good   .feedback-metric { color: var(--green); }
+    .feedback-card.ok     .feedback-metric { color: var(--accent); }
+    .feedback-card.improve .feedback-metric { color: var(--red); }
+    .feedback-status {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .feedback-card.good    .feedback-status { background: rgba(0,204,136,0.1); color: var(--green); }
+    .feedback-card.ok      .feedback-status { background: rgba(200,240,0,0.1); color: var(--accent); }
+    .feedback-card.improve .feedback-status { background: rgba(255,68,68,0.1); color: var(--red); }
+    .feedback-msg { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    
   </style>
 </head>
 
@@ -941,6 +987,9 @@
       <div class="results-sub">Blue line = your serve &nbsp;·&nbsp; Dashed = ATP average</div>
     </div>
 
+     <!-- Feedback cards -->
+     <div id="feedback-grid" class="feedback-grid reveal"></div>
+
     <div class="summary-grid" id="summary-grid"></div>
 
     <div class="chart-grid">
@@ -964,6 +1013,21 @@
         <div class="chart-sub">Positive = right shoulder higher (ideal at contact)</div>
         <canvas id="chart-tilt"></canvas>
       </div>
+      <div class="chart-card" id="card-xfactor">
+        <div class="chart-title">X-Factor — Shoulder/Hip Separation</div>
+        <div class="chart-sub">Elite servers peak at 25–45° · bigger coil = more power potential</div>
+        <canvas id="chart-xfactor"></canvas>
+      </div>
+      <div class="chart-card" id="card-knee">
+        <div class="chart-title">Knee Bend</div>
+        <div class="chart-sub">Lower angle = deeper bend · drives leg power into the kinetic chain</div>
+        <canvas id="chart-knee"></canvas>
+      </div>
+      <div class="chart-card" id="card-weight">
+        <div class="chart-title">Weight Transfer</div>
+        <div class="chart-sub">Rising line = weight shifting forward through contact (ideal)</div>
+        <canvas id="chart-weight"></canvas>
+      </div>
     </div>
 
   </section>
@@ -980,7 +1044,7 @@
     <div class="steps-grid reveal">
       <div class="step">
         <div class="step-num">01 —</div>
-        <div class="step-icon">📱</div>
+        <div class="step-icon">📹</div>
         <div class="step-title">Film your serve</div>
         <div class="step-desc">Side-on, landscape mode. 240fps slow motion gives the cleanest tracking.</div>
       </div>
